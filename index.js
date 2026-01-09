@@ -17,27 +17,8 @@ app.use(cors({
 
 app.use(express.json());
 
-// Health check endpoint
-app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'DXS OAuth Proxy is running' });
-});
-
-// OAuth authorization endpoint - redirects to GitHub
-app.get('/auth', (req, res) => {
-  const { provider } = req.query;
-  
-  if (provider !== 'github') {
-    return res.status(400).json({ error: 'Only GitHub provider is supported' });
-  }
-
-  const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=repo,user`;
-  res.redirect(authUrl);
-});
-
-// OAuth callback endpoint - exchanges code for token
-app.get('/callback', async (req, res) => {
-  const { code } = req.query;
-
+// Function to handle OAuth callback
+async function handleOAuthCallback(code, res) {
   if (!code) {
     return res.status(400).json({ error: 'No code provided' });
   }
@@ -86,6 +67,37 @@ app.get('/callback', async (req, res) => {
     console.error('OAuth error:', error);
     res.status(500).json({ error: 'Failed to exchange code for token' });
   }
+}
+
+// Health check endpoint - also handles callback if code is present
+app.get('/', async (req, res) => {
+  const { code } = req.query;
+  
+  // If code is present, this is an OAuth callback
+  if (code) {
+    return handleOAuthCallback(code, res);
+  }
+  
+  // Otherwise, return health check
+  res.json({ status: 'ok', message: 'DXS OAuth Proxy is running' });
+});
+
+// OAuth authorization endpoint - redirects to GitHub
+app.get('/auth', (req, res) => {
+  const { provider } = req.query;
+  
+  if (provider !== 'github') {
+    return res.status(400).json({ error: 'Only GitHub provider is supported' });
+  }
+
+  const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=repo,user`;
+  res.redirect(authUrl);
+});
+
+// OAuth callback endpoint - exchanges code for token
+app.get('/callback', async (req, res) => {
+  const { code } = req.query;
+  return handleOAuthCallback(code, res);
 });
 
 // Success endpoint (alternative callback format)
