@@ -46,20 +46,54 @@ async function handleOAuthCallback(code, res) {
 
     // Return the token in the format Decap CMS expects
     const content = `
-      <script>
-        (function() {
-          function receiveMessage(e) {
-            console.log("receiveMessage %o", e);
-            window.opener.postMessage(
-              'authorization:github:success:${JSON.stringify({ token: tokenData.access_token, provider: 'github' })}',
-              e.origin
-            );
-            window.removeEventListener("message", receiveMessage, false);
-          }
-          window.addEventListener("message", receiveMessage, false);
-          window.opener.postMessage("authorizing:github", "*");
-        })();
-      </script>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>OAuth Callback</title>
+</head>
+<body>
+  <p>Authenticating...</p>
+  <script>
+    (function() {
+      const token = "${tokenData.access_token}";
+      const provider = "github";
+      
+      function sendMessage(message) {
+        if (window.opener) {
+          window.opener.postMessage(message, "*");
+        }
+      }
+      
+      function receiveMessage(e) {
+        console.log("receiveMessage", e);
+        if (e.data === "authorizing:github") {
+          return;
+        }
+        sendMessage(
+          'authorization:github:success:' + JSON.stringify({ token: token, provider: provider })
+        );
+        window.removeEventListener("message", receiveMessage, false);
+      }
+      
+      window.addEventListener("message", receiveMessage, false);
+      
+      // Send initial message to opener
+      sendMessage("authorizing:github");
+      
+      // Also try sending success directly after a short delay
+      setTimeout(function() {
+        sendMessage(
+          'authorization:github:success:' + JSON.stringify({ token: token, provider: provider })
+        );
+        // Close the window after sending
+        setTimeout(function() {
+          window.close();
+        }, 1000);
+      }, 500);
+    })();
+  </script>
+</body>
+</html>
     `;
     
     res.send(content);
